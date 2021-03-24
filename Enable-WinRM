@@ -1,8 +1,11 @@
+# Delete any self-signed certs that might exist 
+Get-ChildItem 'Cert:\\LocalMachine\\My' | Where-Object {$_.Subject -eq $_.Issuer} | Remove-Item
+
 # Create self-signed certificate
 $IP = (Get-NetIPAddress -InterfaceAlias "Ethernet*" -AddressFamily IPv4).IPAddress
 $CertificateThumbprint = (New-SelfSignedCertificate -DnsName $env:COMPUTERNAME, $IP -CertStoreLocation "Cert:\LocalMachine\My").Thumbprint
 
-# Create WinRM listener
+# Create WinRM HTTPS listener using the cert that was just created
 $listener = @{
     ResourceURI = "winrm/config/Listener"
     SelectorSet = @{Address = "*"; Transport = "HTTPS" }
@@ -13,16 +16,23 @@ New-WSManInstance @listener
 # Enable Basic authentication
 Set-WSManInstance -ResourceURI WinRM/Config/Service/Auth -ValueSet @{Basic = "true" } 
 
-# Create the firewall rule
-$rule = @{
-    Name        = "WINRM-HTTPS-In-TCP"
-    DisplayName = "Windows Remote Management (HTTPS-In)"
-    Description = "Inbound rule for Windows Remote Management via WS-Management. [TCP 5986]"
-    Enabled     = "true"
-    Direction   = "Inbound"
-    Profile     = "Any"
-    Action      = "Allow"
-    Protocol    = "TCP"
-    LocalPort   = "5986"
+# Check for existing firewall rule
+$RuleExists = Get-NetFirewallRule | Where-Object {$_.Name -like "*WINRM-HTTPS-In-TCP*"}
+
+If (!$RuleExists) {
+
+    # Create the firewall rule
+    $rule = @{
+        Name        = "WINRM-HTTPS-In-TCP"
+        DisplayName = "Windows Remote Management (HTTPS-In)"
+        Description = "Inbound rule for Windows Remote Management via WS-Management. [TCP 5986]"
+        Enabled     = "true"
+        Direction   = "Inbound"
+        Profile     = "Any"
+        Action      = "Allow"
+        Protocol    = "TCP"
+        LocalPort   = "5986"
+    }
+    New-NetFirewallRule @rule
+
 }
-New-NetFirewallRule @rule
