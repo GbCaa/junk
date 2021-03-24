@@ -36,3 +36,7 @@ If (!$RuleExists) {
     New-NetFirewallRule @rule
 
 }
+
+If ($RuleExists) {
+Enable-NetFirewallRule -Name "WINRM-HTTPS-In-TCP"
+}
